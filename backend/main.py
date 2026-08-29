@@ -1,5 +1,11 @@
 import httpx
 from fastapi import FastAPI
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+LASTFM_API_KEY = os.getenv("LASTFM_API_KEY")
 
 app = FastAPI(title="TuneMatch API")
 
@@ -7,6 +13,42 @@ app = FastAPI(title="TuneMatch API")
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+
+@app.get("/artist-info")
+async def artist_info(artist: str, track: str):
+    async with httpx.AsyncClient() as client:
+        tags_response = await client.get(
+            "https://ws.audioscrobbler.com/2.0/",
+            params={
+                "method": "track.getTopTags",
+                "artist": artist,
+                "track": track,
+                "api_key": LASTFM_API_KEY,
+                "format": "json",
+            },
+        )
+        tags_data = tags_response.json()
+
+        tags = [tag["name"] for tag in tags_data.get("toptags", {}).get("tag", [])][:10]
+
+        similar_response = await client.get(
+            "https://ws.audioscrobbler.com/2.0/",
+            params={
+                "method": "artist.getSimilar",
+                "artist": artist,
+                "api_key": LASTFM_API_KEY,
+                "format": "json",
+            },
+        )
+        similar_data = similar_response.json()
+
+        similar_artists = [
+            {"name": a["name"], "match": float(a["match"])}
+            for a in similar_data.get("similarartists", {}).get("artist", [])
+        ][:10]
+
+    return {"artist": artist, "track": track, "tags": tags, "similar_artists": similar_artists}
 
 
 @app.get("/resolve")
