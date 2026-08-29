@@ -7,7 +7,7 @@ Tracking progress against PRD section 9.
 - [x] 3. Backend: Deezer/iTunes track resolution endpoint
 - [x] 4. Backend: Last.fm tag + similar-artist integration
 - [ ] 5. Backend: MusicBrainz integration
-- [ ] 6. Backend: ranking/scoring logic + /recommendations endpoint
+- [x] 6. Backend: ranking/scoring logic + /recommendations endpoint
 - [ ] 7. Backend: Odesli cross-platform link enrichment
 - [ ] 8. Frontend: scaffold + search UI
 - [ ] 9. Frontend: results list + preview player + platform links
