@@ -4,7 +4,7 @@ Tracking progress against PRD section 9.
 
 - [x] 1. Repo scaffold + PRD
 - [x] 2. Backend: FastAPI skeleton + health check endpoint
-- [ ] 3. Backend: Deezer/iTunes track resolution endpoint
+- [x] 3. Backend: Deezer/iTunes track resolution endpoint
 - [ ] 4. Backend: Last.fm tag + similar-artist integration
 - [ ] 5. Backend: MusicBrainz integration
 - [ ] 6. Backend: ranking/scoring logic + /recommendations endpoint
