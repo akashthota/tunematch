@@ -2,6 +2,7 @@ import httpx
 from fastapi import FastAPI
 import os
 from dotenv import load_dotenv
+from urllib.parse import quote
 
 load_dotenv()
 
@@ -137,6 +138,15 @@ async def get_recommendations(artist: str, track: str, limit: int = 10):
             if key not in seen:
                 seen.add(key)
                 deduped.append(c)
+
+        # Step 5: build cross-platform search links (Odesli's free tier was discontinued)
+        for c in deduped[:limit]:
+            search_term = quote(f"{c['artist']} {c['title']}")
+            c["links"] = {
+                "spotify": f"https://open.spotify.com/search/{search_term}",
+                "apple_music": f"https://music.apple.com/search?term={search_term}",
+                "youtube_music": f"https://music.youtube.com/search?q={search_term}",
+            }
 
     return {
         "seed": {"artist": artist, "track": track, "tags": seed_tags},
