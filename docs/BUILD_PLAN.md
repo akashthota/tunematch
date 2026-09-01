@@ -9,7 +9,7 @@ Tracking progress against PRD section 9.
 - [ ] 5. Backend: MusicBrainz integration
 - [x] 6. Backend: ranking/scoring logic + /recommendations endpoint
 - [x] 7. Backend: cross-platform search links (Odesli replaced - see deviations)
-- [ ] 8. Frontend: scaffold + search UI
+- [x] 8. Frontend: scaffold + search UI
 - [ ] 9. Frontend: results list + preview player + platform links
 - [ ] 10. Wire frontend to backend, end-to-end test
 - [ ] 11. README + deployment docs
