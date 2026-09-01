@@ -1,5 +1,6 @@
 import httpx
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
 from urllib.parse import quote
@@ -9,6 +10,12 @@ load_dotenv()
 LASTFM_API_KEY = os.getenv("LASTFM_API_KEY")
 
 app = FastAPI(title="TuneMatch API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")
