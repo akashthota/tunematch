@@ -120,9 +120,7 @@ function App() {
 
           {!loading && candidates.length > 0 && (
             <>
-              <div className="seed-label">
-                Which one did you mean?
-              </div>
+              <div className="seed-label">Which one did you mean?</div>
               <div className="candidate-list">
                 {candidates.map((c) => (
                   <button
@@ -150,8 +148,26 @@ function App() {
           {!loading && results.length > 0 && (
             <>
               {seed && (
-                <div className="seed-label">
-                  Because you searched <strong>{seed.title}</strong> by {seed.artist}
+                <div className="seed-section">
+                  <div className="seed-label">Your search</div>
+                  <div className="track-card seed-card">
+                    <div className="track-cover-wrap">
+                      <img src={seed.cover_art} alt="" className="track-cover" />
+                      <button
+                        className="track-play-btn"
+                        onClick={() => handlePlayTrack(seed)}
+                      >
+                        {nowPlaying?.id === seed.id && isPlaying ? (
+                          <Pause size={18} />
+                        ) : (
+                          <Play size={18} />
+                        )}
+                      </button>
+                    </div>
+                    <div className="track-title">{seed.title}</div>
+                    <div className="track-artist">{seed.artist}</div>
+                  </div>
+                  <div className="seed-label results-label">Similar tracks</div>
                 </div>
               )}
               <div className="results-shelf">

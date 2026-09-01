@@ -158,15 +158,12 @@
 
 /* Results shelf */
 .results-shelf {
-  display: flex;
-  gap: 20px;
-  overflow-x: auto;
-  padding-bottom: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 24px;
 }
 
 .track-card {
-  flex-shrink: 0;
-  width: 180px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -174,8 +171,8 @@
 
 .track-cover-wrap {
   position: relative;
-  width: 180px;
-  height: 180px;
+  width: 100%;
+  aspect-ratio: 1 / 1;
   border-radius: 8px;
   overflow: hidden;
   margin-bottom: 4px;
@@ -311,4 +308,18 @@
   font-size: 12px;
   color: var(--color-text-secondary);
   margin-top: 2px;
+}
+
+.seed-section {
+  margin-bottom: 36px;
+}
+
+.seed-card {
+  width: 180px;
+  margin-top: 8px;
+  margin-bottom: 28px;
+}
+
+.results-label {
+  margin-bottom: 16px;
 }
