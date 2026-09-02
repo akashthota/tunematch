@@ -4,6 +4,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
 from urllib.parse import quote
+from database import init_db
+
+init_db()
 
 load_dotenv()
 
