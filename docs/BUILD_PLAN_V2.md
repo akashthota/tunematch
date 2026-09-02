@@ -9,7 +9,7 @@ Last.fm tags and artist-similarity metadata.
       real BPM/energy extracted from a live Deezer preview via test_essentia.py)
 - [x] 3. Audio analysis endpoint/function (download preview, run Essentia, cache in DB) - tested standalone, cache-hit confirmed instant
 - [ ] 4. Background processing (FastAPI BackgroundTasks so analysis doesn't block requests)
-- [ ] 5. Blend audio features into /recommendations scoring
+- [x] 5. Blend audio features into /recommendations scoring - verified working, all candidates audio_matched=true
 - [ ] 6. Test against the known problem case (Seoul City / Jennie)
 - [ ] 7. Update docs
 

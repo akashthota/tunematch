@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
 from urllib.parse import quote
+from audio_analysis import analyze_track
 from database import init_db
 
 init_db()
@@ -89,6 +90,18 @@ async def get_recommendations(artist: str, track: str, limit: int = 10):
         )
         similar_artists = similar_response.json().get("similarartists", {}).get("artist", [])[:8]
 
+        # Step 1b: resolve the seed track on Deezer to get its own audio features
+        seed_deezer_response = await client.get(
+            "https://api.deezer.com/search",
+            params={"q": f"{artist} {track}"},
+        )
+        seed_deezer_tracks = seed_deezer_response.json().get("data", [])
+        seed_audio = None
+        if seed_deezer_tracks:
+            seed_id = seed_deezer_tracks[0]["id"]
+            seed_preview = seed_deezer_tracks[0]["preview"]
+            seed_audio = await analyze_track(seed_id, "deezer", seed_preview)
+
         # Step 2: build candidate pool from each similar artist's top tracks on Deezer
         candidates = []
         for sim_artist in similar_artists:
@@ -132,12 +145,28 @@ async def get_recommendations(artist: str, track: str, limit: int = 10):
             similar_artist_score = c["similar_artist_match"] * 20
             same_artist_penalty = -15 if c["artist"].lower() == artist.lower() else 0
 
-            total_score = tag_score + similar_artist_score + same_artist_penalty
+            # Audio similarity: only computed if both seed and candidate analyzed successfully
+            audio_score = 0
+            c_audio = await analyze_track(c["id"], "deezer", c["preview_url"])
+            if seed_audio and c_audio:
+                tempo_diff = abs(seed_audio["tempo"] - c_audio["tempo"])
+                tempo_score = max(0, 10 - tempo_diff / 5)
+
+                if max(seed_audio["energy"], c_audio["energy"]) > 0:
+                    energy_ratio = min(seed_audio["energy"], c_audio["energy"]) / max(seed_audio["energy"], c_audio["energy"])
+                else:
+                    energy_ratio = 0
+                energy_score = energy_ratio * 10
+
+                audio_score = tempo_score + energy_score
+
+            total_score = tag_score + similar_artist_score + same_artist_penalty + audio_score
 
             scored.append({
                 **{k: v for k, v in c.items() if k != "similar_artist_match"},
                 "score": round(total_score, 2),
                 "matched_tags": [t for t in seed_tags if t in c_tags],
+                "audio_matched": c_audio is not None and seed_audio is not None,
             })
 
         # Step 4: dedupe by artist+title, sort by score, cap at limit
@@ -149,7 +178,7 @@ async def get_recommendations(artist: str, track: str, limit: int = 10):
                 seen.add(key)
                 deduped.append(c)
 
-        # Step 5: build cross-platform search links (Odesli's free tier was discontinued)
+        # Step 5: build cross-platform search links
         for c in deduped[:limit]:
             search_term = quote(f"{c['artist']} {c['title']}")
             c["links"] = {
@@ -159,7 +188,7 @@ async def get_recommendations(artist: str, track: str, limit: int = 10):
             }
 
     return {
-        "seed": {"artist": artist, "track": track, "tags": seed_tags},
+        "seed": {"artist": artist, "track": track, "tags": seed_tags, "audio": seed_audio},
         "recommendations": deduped[:limit],
     }
 
