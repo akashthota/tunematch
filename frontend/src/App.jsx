@@ -188,6 +188,11 @@ function App() {
                     </div>
                     <div className="track-title">{track.title}</div>
                     <div className="track-artist">{track.artist}</div>
+                    {track.audio_matched && (
+                      <div className={`audio-badge ${track.audio_similarity >= 0.7 ? "match" : track.audio_similarity >= 0.5 ? "partial" : "mismatch"}`}>
+                        {Math.round(track.audio_similarity * 100)}% sound match
+                      </div>
+                    )}
                     <div className="track-meta">
                       <span className="track-score">{track.score}</span>
                       <div className="track-links">
