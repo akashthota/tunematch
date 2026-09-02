@@ -116,9 +116,13 @@ async def get_recommendations(artist: str, track: str, limit: int = 10):
             seed_preview = seed_deezer_tracks[0]["preview"]
             seed_audio = await analyze_track(seed_id, "deezer", seed_preview)
 
-        # Step 2: build candidate pool from each similar artist's top tracks on Deezer
+        # Step 2: build candidate pool from two sources —
+        # (a) similar artists' tracks, (b) tracks matching the seed's own genre tags,
+        # so the pool isn't entirely bottlenecked by artist-scene relationships
         candidates = []
         for sim_artist in similar_artists:
+            if "," in sim_artist["name"]:
+                continue  # skip collaboration-credit entries, unreliable for search
             deezer_response = await client.get(
                 "https://api.deezer.com/search",
                 params={"q": sim_artist["name"]},
@@ -133,6 +137,23 @@ async def get_recommendations(artist: str, track: str, limit: int = 10):
                     "cover_art": dt["album"]["cover_medium"],
                     "preview_url": dt["preview"],
                     "similar_artist_match": float(sim_artist["match"]),
+                })
+
+        for genre_tag in seed_tags[:3]:
+            tag_deezer_response = await client.get(
+                "https://api.deezer.com/search",
+                params={"q": genre_tag},
+            )
+            tag_tracks = tag_deezer_response.json().get("data", [])[:4]
+
+            for dt in tag_tracks:
+                candidates.append({
+                    "id": dt["id"],
+                    "title": dt["title"],
+                    "artist": dt["artist"]["name"],
+                    "cover_art": dt["album"]["cover_medium"],
+                    "preview_url": dt["preview"],
+                    "similar_artist_match": 0.0,  # not artist-sourced, no artist-graph bonus
                 })
 
         # Step 3: score each candidate
@@ -153,18 +174,15 @@ async def get_recommendations(artist: str, track: str, limit: int = 10):
             )
             c_tags = [t["name"].lower() for t in c_tags_response.json().get("toptags", {}).get("tag", [])][:10]
 
-            tag_score = sum(
-                (10 - i) for i, tag in enumerate(seed_tags) if tag in c_tags
-            )
-            similar_artist_score = c["similar_artist_match"] * 20
             same_artist_penalty = -15 if c["artist"].lower() == artist.lower() else 0
 
-            # Audio similarity via cosine similarity on normalized [tempo, energy, centroid] vectors
+            # Audio similarity is now the primary ranking signal — tags/similar-artist
+            # score are only used to source the candidate pool, not to rank within it
             c_audio = await analyze_track(c["id"], "deezer", c["preview_url"])
             audio_sim = audio_similarity(seed_audio, c_audio)
-            audio_score = audio_sim * 40  # scaled to be comparable in weight to tag/artist signals
+            audio_score = audio_sim * 100
 
-            total_score = tag_score + similar_artist_score + same_artist_penalty + audio_score
+            total_score = audio_score + same_artist_penalty
 
             scored.append({
                 **{k: v for k, v in c.items() if k != "similar_artist_match"},
@@ -174,14 +192,21 @@ async def get_recommendations(artist: str, track: str, limit: int = 10):
                 "audio_similarity": round(audio_sim, 3),
             })
 
-        # Step 4: dedupe by artist+title, sort by score, cap at limit
+        # Step 4: dedupe by artist+title, cap tracks per artist for variety, sort by score
         seen = set()
+        artist_counts = {}
         deduped = []
+        MAX_PER_ARTIST = 2
         for c in sorted(scored, key=lambda x: x["score"], reverse=True):
             key = (c["artist"].lower(), c["title"].lower())
-            if key not in seen:
-                seen.add(key)
-                deduped.append(c)
+            artist_key = c["artist"].lower()
+            if key in seen:
+                continue
+            if artist_counts.get(artist_key, 0) >= MAX_PER_ARTIST:
+                continue
+            seen.add(key)
+            artist_counts[artist_key] = artist_counts.get(artist_key, 0) + 1
+            deduped.append(c)
 
         # Step 5: build cross-platform search links
         for c in deduped[:limit]:
