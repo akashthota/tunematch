@@ -12,6 +12,7 @@ def init_db():
             source TEXT NOT NULL,
             tempo REAL,
             energy REAL,
+            centroid REAL,
             analyzed_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -31,18 +32,18 @@ def get_db():
 def get_cached_analysis(track_id):
     with get_db() as conn:
         row = conn.execute(
-            "SELECT tempo, energy FROM analyzed_tracks WHERE track_id = ?",
+            "SELECT tempo, energy, centroid FROM analyzed_tracks WHERE track_id = ?",
             (str(track_id),),
         ).fetchone()
-        if row:
-            return {"tempo": row["tempo"], "energy": row["energy"]}
+        if row and row["centroid"] is not None:
+            return {"tempo": row["tempo"], "energy": row["energy"], "centroid": row["centroid"]}
         return None
 
 
-def save_analysis(track_id, source, tempo, energy):
+def save_analysis(track_id, source, tempo, energy, centroid):
     with get_db() as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO analyzed_tracks (track_id, source, tempo, energy) VALUES (?, ?, ?, ?)",
-            (str(track_id), source, tempo, energy),
+            "INSERT OR REPLACE INTO analyzed_tracks (track_id, source, tempo, energy, centroid) VALUES (?, ?, ?, ?, ?)",
+            (str(track_id), source, tempo, energy, centroid),
         )
         conn.commit()

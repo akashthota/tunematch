@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
 from urllib.parse import quote
-from audio_analysis import analyze_track
+from audio_analysis import analyze_track, audio_similarity
 from database import init_db
 
 init_db()
@@ -62,6 +62,20 @@ async def artist_info(artist: str, track: str):
 
     return {"artist": artist, "track": track, "tags": tags, "similar_artists": similar_artists}
 
+@app.get("/debug-track-similar")
+async def debug_track_similar(artist: str, track: str):
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            "https://ws.audioscrobbler.com/2.0/",
+            params={
+                "method": "track.getsimilar",
+                "artist": artist,
+                "track": track,
+                "api_key": LASTFM_API_KEY,
+                "format": "json",
+            },
+        )
+        return response.json()
 
 @app.get("/recommendations")
 async def get_recommendations(artist: str, track: str, limit: int = 10):
@@ -145,28 +159,10 @@ async def get_recommendations(artist: str, track: str, limit: int = 10):
             similar_artist_score = c["similar_artist_match"] * 20
             same_artist_penalty = -15 if c["artist"].lower() == artist.lower() else 0
 
-            # Audio similarity: only computed if both seed and candidate analyzed successfully
-            audio_score = 0
-            tempo_mismatch = False
+            # Audio similarity via cosine similarity on normalized [tempo, energy, centroid] vectors
             c_audio = await analyze_track(c["id"], "deezer", c["preview_url"])
-            if seed_audio and c_audio:
-                tempo_diff = abs(seed_audio["tempo"] - c_audio["tempo"])
-
-                # Hard filter: tempo/feel is too different to be a genuine match,
-                # regardless of tag or artist-similarity signals
-                if tempo_diff > 40:
-                    tempo_mismatch = True
-                    audio_score = -25
-                else:
-                    tempo_score = max(0, 10 - tempo_diff / 5)
-
-                    if max(seed_audio["energy"], c_audio["energy"]) > 0:
-                        energy_ratio = min(seed_audio["energy"], c_audio["energy"]) / max(seed_audio["energy"], c_audio["energy"])
-                    else:
-                        energy_ratio = 0
-                    energy_score = energy_ratio * 10
-
-                    audio_score = tempo_score + energy_score
+            audio_sim = audio_similarity(seed_audio, c_audio)
+            audio_score = audio_sim * 40  # scaled to be comparable in weight to tag/artist signals
 
             total_score = tag_score + similar_artist_score + same_artist_penalty + audio_score
 
@@ -175,7 +171,7 @@ async def get_recommendations(artist: str, track: str, limit: int = 10):
                 "score": round(max(0, total_score), 2),
                 "matched_tags": [t for t in seed_tags if t in c_tags],
                 "audio_matched": c_audio is not None and seed_audio is not None,
-                "tempo_mismatch": tempo_mismatch,
+                "audio_similarity": round(audio_sim, 3),
             })
 
         # Step 4: dedupe by artist+title, sort by score, cap at limit

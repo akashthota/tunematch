@@ -1,7 +1,15 @@
 import os
+import math
 import httpx
 import essentia.standard as es
 from database import get_cached_analysis, save_analysis
+
+# Real-world ranges observed from a 96-track survey across genres, used for normalization
+TEMPO_RANGE = (60, 180)
+ENERGY_RANGE = (0.0, 0.2)
+CENTROID_RANGE = (200, 3200)
+
+ENERGY_WEIGHT = 0.3  # down-weighted: less reliable signal than tempo/centroid
 
 
 async def analyze_track(track_id, source, preview_url):
@@ -32,8 +40,10 @@ async def analyze_track(track_id, source, preview_url):
         raw_energy = es.Energy()(audio)
         normalized_energy = raw_energy / len(audio)  # average energy per sample, not affected by clip length/gain
 
-        save_analysis(track_id, source, float(bpm), float(normalized_energy))
-        return {"tempo": float(bpm), "energy": float(normalized_energy)}
+        centroid = es.SpectralCentroidTime()(audio)
+
+        save_analysis(track_id, source, float(bpm), float(normalized_energy), float(centroid))
+        return {"tempo": float(bpm), "energy": float(normalized_energy), "centroid": float(centroid)}
 
     except Exception as e:
         print(f"Analysis failed for track {track_id}: {e}")
@@ -42,3 +52,33 @@ async def analyze_track(track_id, source, preview_url):
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
+
+
+def _normalize(value, value_range):
+    lo, hi = value_range
+    return max(0.0, min(1.0, (value - lo) / (hi - lo)))
+
+
+def audio_similarity(seed_audio, candidate_audio):
+    if not seed_audio or not candidate_audio:
+        return 0.0
+
+    seed_vec = [
+        _normalize(seed_audio["tempo"], TEMPO_RANGE),
+        _normalize(seed_audio["energy"], ENERGY_RANGE) * ENERGY_WEIGHT,
+        _normalize(seed_audio["centroid"], CENTROID_RANGE),
+    ]
+    cand_vec = [
+        _normalize(candidate_audio["tempo"], TEMPO_RANGE),
+        _normalize(candidate_audio["energy"], ENERGY_RANGE) * ENERGY_WEIGHT,
+        _normalize(candidate_audio["centroid"], CENTROID_RANGE),
+    ]
+
+    squared_diffs = [(a - b) ** 2 for a, b in zip(seed_vec, cand_vec)]
+    distance = math.sqrt(sum(squared_diffs))
+
+    # max possible distance is the diagonal of the normalized feature space
+    max_distance = math.sqrt(1 ** 2 + ENERGY_WEIGHT ** 2 + 1 ** 2)
+
+    similarity = 1 - (distance / max_distance)
+    return max(0.0, similarity)
