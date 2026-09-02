@@ -147,26 +147,35 @@ async def get_recommendations(artist: str, track: str, limit: int = 10):
 
             # Audio similarity: only computed if both seed and candidate analyzed successfully
             audio_score = 0
+            tempo_mismatch = False
             c_audio = await analyze_track(c["id"], "deezer", c["preview_url"])
             if seed_audio and c_audio:
                 tempo_diff = abs(seed_audio["tempo"] - c_audio["tempo"])
-                tempo_score = max(0, 10 - tempo_diff / 5)
 
-                if max(seed_audio["energy"], c_audio["energy"]) > 0:
-                    energy_ratio = min(seed_audio["energy"], c_audio["energy"]) / max(seed_audio["energy"], c_audio["energy"])
+                # Hard filter: tempo/feel is too different to be a genuine match,
+                # regardless of tag or artist-similarity signals
+                if tempo_diff > 40:
+                    tempo_mismatch = True
+                    audio_score = -25
                 else:
-                    energy_ratio = 0
-                energy_score = energy_ratio * 10
+                    tempo_score = max(0, 10 - tempo_diff / 5)
 
-                audio_score = tempo_score + energy_score
+                    if max(seed_audio["energy"], c_audio["energy"]) > 0:
+                        energy_ratio = min(seed_audio["energy"], c_audio["energy"]) / max(seed_audio["energy"], c_audio["energy"])
+                    else:
+                        energy_ratio = 0
+                    energy_score = energy_ratio * 10
+
+                    audio_score = tempo_score + energy_score
 
             total_score = tag_score + similar_artist_score + same_artist_penalty + audio_score
 
             scored.append({
                 **{k: v for k, v in c.items() if k != "similar_artist_match"},
-                "score": round(total_score, 2),
+                "score": round(max(0, total_score), 2),
                 "matched_tags": [t for t in seed_tags if t in c_tags],
                 "audio_matched": c_audio is not None and seed_audio is not None,
+                "tempo_mismatch": tempo_mismatch,
             })
 
         # Step 4: dedupe by artist+title, sort by score, cap at limit

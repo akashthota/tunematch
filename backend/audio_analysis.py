@@ -28,10 +28,12 @@ async def analyze_track(track_id, source, preview_url):
 
         rhythm_extractor = es.RhythmExtractor2013(method="multifeature")
         bpm, _, beats_confidence, _, _ = rhythm_extractor(audio)
-        energy = es.Energy()(audio)
 
-        save_analysis(track_id, source, float(bpm), float(energy))
-        return {"tempo": float(bpm), "energy": float(energy)}
+        raw_energy = es.Energy()(audio)
+        normalized_energy = raw_energy / len(audio)  # average energy per sample, not affected by clip length/gain
+
+        save_analysis(track_id, source, float(bpm), float(normalized_energy))
+        return {"tempo": float(bpm), "energy": float(normalized_energy)}
 
     except Exception as e:
         print(f"Analysis failed for track {track_id}: {e}")

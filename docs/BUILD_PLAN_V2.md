@@ -10,7 +10,7 @@ Last.fm tags and artist-similarity metadata.
 - [x] 3. Audio analysis endpoint/function (download preview, run Essentia, cache in DB) - tested standalone, cache-hit confirmed instant
 - [ ] 4. Background processing (FastAPI BackgroundTasks so analysis doesn't block requests)
 - [x] 5. Blend audio features into /recommendations scoring - verified working, all candidates audio_matched=true
-- [ ] 6. Test against the known problem case (Seoul City / Jennie)
+- [x] 6. Test against the known problem case (Seoul City / Jennie) - confirmed working: tempo-mismatched K-pop tracks correctly demoted, tempo/vibe-appropriate non-K-pop tracks (Maroon 5, Ninho) now rank above them
 - [ ] 7. Update docs
 
 ## Notes
