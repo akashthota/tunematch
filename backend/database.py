@@ -27,3 +27,22 @@ def get_db():
         yield conn
     finally:
         conn.close()
+
+def get_cached_analysis(track_id):
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT tempo, energy FROM analyzed_tracks WHERE track_id = ?",
+            (str(track_id),),
+        ).fetchone()
+        if row:
+            return {"tempo": row["tempo"], "energy": row["energy"]}
+        return None
+
+
+def save_analysis(track_id, source, tempo, energy):
+    with get_db() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO analyzed_tracks (track_id, source, tempo, energy) VALUES (?, ?, ?, ?)",
+            (str(track_id), source, tempo, energy),
+        )
+        conn.commit()
