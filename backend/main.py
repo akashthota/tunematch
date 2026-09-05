@@ -41,7 +41,6 @@ async def artist_info(artist: str, track: str):
             },
         )
         tags_data = tags_response.json()
-
         tags = [tag["name"] for tag in tags_data.get("toptags", {}).get("tag", [])][:10]
 
         similar_response = await client.get(
@@ -54,7 +53,6 @@ async def artist_info(artist: str, track: str):
             },
         )
         similar_data = similar_response.json()
-
         similar_artists = [
             {"name": a["name"], "match": float(a["match"])}
             for a in similar_data.get("similarartists", {}).get("artist", [])
@@ -62,20 +60,6 @@ async def artist_info(artist: str, track: str):
 
     return {"artist": artist, "track": track, "tags": tags, "similar_artists": similar_artists}
 
-@app.get("/debug-track-similar")
-async def debug_track_similar(artist: str, track: str):
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            "https://ws.audioscrobbler.com/2.0/",
-            params={
-                "method": "track.getsimilar",
-                "artist": artist,
-                "track": track,
-                "api_key": LASTFM_API_KEY,
-                "format": "json",
-            },
-        )
-        return response.json()
 
 @app.get("/recommendations")
 async def get_recommendations(artist: str, track: str, limit: int = 10):
@@ -116,13 +100,12 @@ async def get_recommendations(artist: str, track: str, limit: int = 10):
             seed_preview = seed_deezer_tracks[0]["preview"]
             seed_audio = await analyze_track(seed_id, "deezer", seed_preview)
 
-        # Step 2: build candidate pool from two sources —
-        # (a) similar artists' tracks, (b) tracks matching the seed's own genre tags,
-        # so the pool isn't entirely bottlenecked by artist-scene relationships
+        # Step 2: build candidate pool from similar artists' tracks on Deezer
         candidates = []
         for sim_artist in similar_artists:
             if "," in sim_artist["name"]:
                 continue  # skip collaboration-credit entries, unreliable for search
+
             deezer_response = await client.get(
                 "https://api.deezer.com/search",
                 params={"q": sim_artist["name"]},
@@ -130,6 +113,9 @@ async def get_recommendations(artist: str, track: str, limit: int = 10):
             deezer_tracks = deezer_response.json().get("data", [])[:2]
 
             for dt in deezer_tracks:
+                # guard against text-search collisions returning a track by a different artist
+                if dt["artist"]["name"].lower() != sim_artist["name"].lower():
+                    continue
                 candidates.append({
                     "id": dt["id"],
                     "title": dt["title"],
@@ -139,28 +125,11 @@ async def get_recommendations(artist: str, track: str, limit: int = 10):
                     "similar_artist_match": float(sim_artist["match"]),
                 })
 
-        for genre_tag in seed_tags[:3]:
-            tag_deezer_response = await client.get(
-                "https://api.deezer.com/search",
-                params={"q": genre_tag},
-            )
-            tag_tracks = tag_deezer_response.json().get("data", [])[:4]
-
-            for dt in tag_tracks:
-                candidates.append({
-                    "id": dt["id"],
-                    "title": dt["title"],
-                    "artist": dt["artist"]["name"],
-                    "cover_art": dt["album"]["cover_medium"],
-                    "preview_url": dt["preview"],
-                    "similar_artist_match": 0.0,  # not artist-sourced, no artist-graph bonus
-                })
-
-        # Step 3: score each candidate
+        # Step 3: score each candidate — audio similarity is the primary ranking signal
         scored = []
         for c in candidates:
             if c["artist"].lower() == artist.lower() and c["title"].lower() == track.lower():
-                continue  # skip the seed track itself
+                continue
 
             c_tags_response = await client.get(
                 "https://ws.audioscrobbler.com/2.0/",
@@ -176,8 +145,6 @@ async def get_recommendations(artist: str, track: str, limit: int = 10):
 
             same_artist_penalty = -15 if c["artist"].lower() == artist.lower() else 0
 
-            # Audio similarity is now the primary ranking signal — tags/similar-artist
-            # score are only used to source the candidate pool, not to rank within it
             c_audio = await analyze_track(c["id"], "deezer", c["preview_url"])
             audio_sim = audio_similarity(seed_audio, c_audio)
             audio_score = audio_sim * 100

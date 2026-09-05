@@ -4,12 +4,11 @@ import httpx
 import essentia.standard as es
 from database import get_cached_analysis, save_analysis
 
-# Real-world ranges observed from a 96-track survey across genres, used for normalization
 TEMPO_RANGE = (60, 180)
 ENERGY_RANGE = (0.0, 0.2)
 CENTROID_RANGE = (200, 3200)
 
-ENERGY_WEIGHT = 0.3  # down-weighted: less reliable signal than tempo/centroid
+ENERGY_WEIGHT = 0.3
 
 
 async def analyze_track(track_id, source, preview_url):
@@ -38,7 +37,7 @@ async def analyze_track(track_id, source, preview_url):
         bpm, _, beats_confidence, _, _ = rhythm_extractor(audio)
 
         raw_energy = es.Energy()(audio)
-        normalized_energy = raw_energy / len(audio)  # average energy per sample, not affected by clip length/gain
+        normalized_energy = raw_energy / len(audio)
 
         centroid = es.SpectralCentroidTime()(audio)
 
@@ -76,8 +75,6 @@ def audio_similarity(seed_audio, candidate_audio):
 
     squared_diffs = [(a - b) ** 2 for a, b in zip(seed_vec, cand_vec)]
     distance = math.sqrt(sum(squared_diffs))
-
-    # max possible distance is the diagonal of the normalized feature space
     max_distance = math.sqrt(1 ** 2 + ENERGY_WEIGHT ** 2 + 1 ** 2)
 
     similarity = 1 - (distance / max_distance)
